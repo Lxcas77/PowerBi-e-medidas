@@ -1,0 +1,25 @@
+Calendario = 
+ADDCOLUMNS(
+    CALENDAR(DATE(2020, 1, 1), DATE(2027, 12, 31)),
+    "Ano", YEAR([Date]),
+    "Mês Num", MONTH([Date]),
+    "Mês Nome", FORMAT([Date], "MMMM"),
+    "Mês Nome Abrev", FORMAT([Date], "MMM"),
+    "Dia", DAY([Date]),
+    "Dia da Semana", FORMAT([Date], "dddd"),
+    "Dia da Semana Abrev", FORMAT([Date], "ddd"),
+    "Número Dia da Semana", WEEKDAY([Date], 2), -- Segunda = 1, Domingo = 7
+    "É Fim de Semana", IF(WEEKDAY([Date], 2) > 5, 1, 0),
+    "É Dia Útil", IF(WEEKDAY([Date], 2) <= 5, 1, 0),
+    "Trimestre", "T" & FORMAT([Date], "Q"),
+    "Trimestre/Ano", "T" & FORMAT([Date], "Q") & "/" & YEAR([Date]),
+    "Trimestre Formatado", FORMAT([Date], "Q") & "T/" & YEAR([Date]),
+    "Semestre", IF(MONTH([Date]) <= 6, "S1", "S2"),
+    "Início do Mês", DATE(YEAR([Date]), MONTH([Date]), 1),
+    "Fim do Mês", EOMONTH([Date], 0),
+    "Dias no Mês", DAY(EOMONTH([Date], 0)),
+    "Ano-Mês", FORMAT([Date], "YYYY-MM"),
+    "Ano-Mês Nome", FORMAT([Date], "YYYY") & "-" & FORMAT([Date], "MMMM"),
+    "Chave Ano-Mês", YEAR([Date]) * 100 + MONTH([Date]),
+    "Trimestre_Ordem", YEAR([Date]) * 10 + QUARTER([Date])
+)
