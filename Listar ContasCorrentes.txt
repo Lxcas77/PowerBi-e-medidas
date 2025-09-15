@@ -1,0 +1,58 @@
+let
+    Request = (Pagina as number) => 
+    let 
+        body =
+        "{
+        ""call"":""ListarContasCorrentes"",
+        ""app_key"": """ & Text.From(app_key) & """,
+        ""app_secret"": """ & Text.From(app_secret) & """,
+        ""param"":[
+            {
+                ""pagina"":" & Text.From(Pagina) & ",
+                ""registros_por_pagina"":100
+            }
+            ]
+        }",
+        Consulta = 
+            Json.Document(
+                Web.Contents(
+                    "https://app.omie.com.br",
+                    [
+                        RelativePath="api/v1/geral/contacorrente/",
+                        Headers=[#"Content-Type"="application/json"],
+                        Content=Text.ToBinary(body)
+                    ]
+                )
+            )
+    in
+        Consulta,
+
+    Tabela = Table.FromRecords({[Pagina=1]}),
+    AlterarTipo = Table.TransformColumnTypes(Tabela,{{"Pagina", Int64.Type}}),
+    InvocarFuncao01 = Table.AddColumn(AlterarTipo, "Tabela", each Request([Pagina])),
+    Tabela1 = InvocarFuncao01{0}[Tabela],
+    Paginas = Tabela1[total_de_paginas],
+
+    ListaPaginas = Table.FromList( 
+        List.Generate(() => 1, each _ <= Paginas, each _ +1), 
+        Splitter.SplitByNothing(), 
+        {"Pagina"}
+    ),
+
+    InvocarFuncao02 = Table.AddColumn(ListaPaginas, "Tabela", each Request([Pagina])),
+    #"Removed Columns" = Table.RemoveColumns(InvocarFuncao02,{"Pagina"}),
+
+    #"Expanded {0}" = Table.ExpandRecordColumn(#"Removed Columns", "Tabela", {"ListarContasCorrentes"}, {"ListarContasCorrentes"}),
+
+    #"Expanded {0}1" = Table.ExpandListColumn(#"Expanded {0}", "ListarContasCorrentes"),
+
+    #"Expanded {0}2" = Table.ExpandRecordColumn(#"Expanded {0}1", "ListarContasCorrentes", {"bloqueado","bol_instr1","bol_sn","cobr_sn","codigo_banco","data_alt","data_inc","descricao","hora_alt","hora_inc","importado_api","inativo","nCodCC","nao_fluxo","nao_resumo","pdv_categoria","pdv_enviar","pdv_sincr_analitica","pix_sn","saldo_inicial","tipo","tipo_conta_corrente","user_alt","user_inc"}),
+
+    #"Índice Adicionado1" = Table.AddIndexColumn(#"Expanded {0}2", "Índice", 1, 1, Int64.Type),
+
+    #"Colunas Reordenadas2" = Table.ReorderColumns(#"Índice Adicionado1", {"Índice", "nCodCC", "descricao"}),
+
+    #"Colunas Renomeadas" = Table.RenameColumns(#"Colunas Reordenadas2", {{"nCodCC", "Código"}, {"descricao", "Nome"}})
+
+in
+    #"Colunas Renomeadas"

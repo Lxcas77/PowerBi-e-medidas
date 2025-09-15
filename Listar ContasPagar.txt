@@ -1,0 +1,60 @@
+let
+    Request = (Pagina as number) => 
+    let 
+        body =
+        "{
+        ""call"":""ListarContasPagar"",
+        ""app_key"": """ & Text.From(app_key) & """,
+        ""app_secret"": """ & Text.From(app_secret) & """,
+        ""param"":[
+            {
+                ""pagina"":"&Text.From(Pagina)&",
+                ""registros_por_pagina"":100
+            }
+            ]
+        }" 
+    ,
+    Consulta = 
+        Json.Document(
+            Web.Contents(
+                "https://app.omie.com.br",
+                [
+                    RelativePath="api/v1/financas/contapagar/",
+                    Headers=[#"Content-Type"="application/json"],
+                    Content=Text.ToBinary(body)
+                ]
+            )
+        )
+
+
+     in
+    Consulta,
+    Tabela = Table.FromRecords({[Pagina=1]}),
+    AlterarTipo = Table.TransformColumnTypes(Tabela,{{"Pagina", Int64.Type}}),
+    InvocarFuncao01 = Table.AddColumn(AlterarTipo, "Tabela", each Request([Pagina])),
+    Tabela1 = InvocarFuncao01{0}[Tabela],
+    Paginas = Tabela1[total_de_paginas],
+    ListaPaginas = Table.FromList( List.Generate( () => 1, each _ <= Paginas , each _ +1 ), Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    InvocarFuncao02 = Table.AddColumn(ListaPaginas, "Tabela", each Request([Column1])),
+    #"Removed Columns" = Table.RemoveColumns(InvocarFuncao02,{"Column1"}),
+    #"Expanded {0}" = Table.ExpandRecordColumn(#"Removed Columns", "Tabela", {"conta_pagar_cadastro"}, {"conta_pagar_cadastro"}),
+    #"Expanded {0}1" = Table.ExpandListColumn(#"Expanded {0}", "conta_pagar_cadastro"),
+    #"Expanded {0}2" = Table.ExpandRecordColumn(#"Expanded {0}1", "conta_pagar_cadastro", {"baixa_bloqueada", "bloqueado", "categorias", "codigo_categoria", "codigo_cliente_fornecedor","codigo_lancamento_integracao","codigo_lancamento_omie","codigo_projeto", "codigo_tipo_documento","data_emissao","data_entrada","data_previsao","data_vencimento","distribuicao", "id_conta_corrente","id_origem","info","numero_parcela","observacao","retem_cofins","retem_csll","retem_ir","retem_iss","retem_pis", "status_titulo", "valor_documento"}),
+    #"Expanded distribuicao" = Table.ExpandListColumn(#"Expanded {0}2", "distribuicao"),
+    #"Expanded distribuicao1" = Table.ExpandRecordColumn(#"Expanded distribuicao", "distribuicao", {"cCodDep", "cDesDep", "nPerDep", "nValDep"}, {"cCodDep", "cDesDep", "nPerDep", "nValDep"}),
+    #"categorias Expandido" = Table.ExpandListColumn(#"Expanded distribuicao1", "categorias"),
+    #"categorias Expandido1" = Table.ExpandRecordColumn(#"categorias Expandido", "categorias", {"codigo_categoria", "percentual", "valor"}, {"codigo_categoria.1", "percentual", "valor"}),
+    #"Tipo Alterado" = Table.TransformColumnTypes(#"categorias Expandido1",{{"percentual", Percentage.Type}, {"valor", Currency.Type}, {"data_emissao", type date}, {"data_entrada", type date}, {"data_previsao", type date}, {"data_vencimento", type date}, {"nPerDep", Percentage.Type}, {"nValDep", Currency.Type}}),
+    #"Tipo Alterado1" = Table.TransformColumnTypes(#"Tipo Alterado",{{"valor_documento", Currency.Type}}),
+    #"Índice Adicionado" = Table.AddIndexColumn(#"Tipo Alterado1", "Índice", 1, 0, Int64.Type),
+    #"Colunas Reordenadas" = Table.ReorderColumns(#"Índice Adicionado",{"Índice", "baixa_bloqueada", "bloqueado", "codigo_categoria.1", "percentual", "valor", "codigo_categoria", "codigo_cliente_fornecedor", "codigo_lancamento_integracao", "codigo_lancamento_omie","codigo_projeto", "codigo_tipo_documento", "data_emissao", "data_entrada", "data_previsao", "data_vencimento", "cCodDep", "cDesDep", "nPerDep", "nValDep", "id_conta_corrente", "id_origem", "info", "numero_parcela", "observacao", "retem_cofins", "retem_csll", "retem_ir", "retem_iss", "retem_pis", "status_titulo", "valor_documento"}),
+    #"Colunas Renomeadas" = Table.RenameColumns(#"Colunas Reordenadas",{{"Índice", "Tipo de Conta"}, {"cCodDep", "Código Departamento"}, {"cDesDep", "Descrição Departamento"}, {"nPerDep", "Percentual Departamento"}, {"nValDep", "Valor Departamento"}}),
+    #"Tipo Alterado2" = Table.TransformColumnTypes(#"Colunas Renomeadas",{{"Tipo de Conta", type text}}),
+    #"Valor Substituído" = Table.ReplaceValue(#"Tipo Alterado2","1","Contas a Pagar",Replacer.ReplaceText,{"Tipo de Conta"}),
+    #"Linhas Classificadas" = Table.Sort(#"Valor Substituído",{{"codigo_categoria.1", Order.Ascending}}),
+    #"Linhas Filtradas" = Table.SelectRows(#"Linhas Classificadas", each ([codigo_categoria.1] <> "2.08.96")),
+    #"Valor Substituído1" = Table.ReplaceValue(#"Linhas Filtradas","Contas a Pagar","Despesas",Replacer.ReplaceText,{"Tipo de Conta"}),
+    #"Linhas Classificadas1" = Table.Sort(#"Valor Substituído1",{{"codigo_lancamento_omie", Order.Ascending}}),
+    #"Tipo Alterado3" = Table.TransformColumnTypes(#"Linhas Classificadas1",{{"Percentual Departamento", type text}})
+in
+    #"Tipo Alterado3"

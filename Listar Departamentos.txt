@@ -1,0 +1,60 @@
+let
+    Request = (Pagina as number) => 
+    let 
+        body =
+        "{
+        ""call"":""ListarDepartamentos"",
+        ""app_key"": """ & Text.From(app_key) & """,
+        ""app_secret"": """ & Text.From(app_secret) & """,
+        ""param"":[
+            {
+                ""pagina"":"&Text.From(Pagina)&",
+                ""registros_por_pagina"":100
+            }
+            ]
+        }" 
+    ,
+    Consulta = 
+        Json.Document(
+            Web.Contents(
+                "https://app.omie.com.br",
+                [
+                    RelativePath="api/v1/geral/departamentos/",
+                    Headers=[#"Content-Type"="application/json"],
+                    Content=Text.ToBinary(body)
+                ]
+            )
+        )
+     in
+    if Value.Is(Consulta, type list) then Consulta{0} else Consulta,
+    
+    // Start with one page
+    PrimeiraConsulta = Request(1),
+    
+    // Get total pages
+    Paginas = PrimeiraConsulta[total_de_paginas],
+    
+    // Create a list of pages
+    ListaPaginas = {1..Paginas},
+    TabelaPaginas = Table.FromList(ListaPaginas, Splitter.SplitByNothing(), {"Pagina"}, null, ExtraValues.Error),
+    
+    // Get data for each page
+    DadosPaginas = Table.AddColumn(TabelaPaginas, "Dados", each Request([Pagina])),
+    
+    // Expand to get departamentos
+    ExpandirDados = Table.ExpandRecordColumn(DadosPaginas, "Dados", {"departamentos"}, {"departamentos"}),
+    ExpandirDepartamentos = Table.ExpandListColumn(ExpandirDados, "departamentos"),
+    ExpandirCampos = Table.ExpandRecordColumn(ExpandirDepartamentos, "departamentos", {"codigo", "descricao", "estrutura", "inativo"}, {"codigo", "descricao", "estrutura", "inativo"}),
+    
+    // Format data types
+    FormatarTipos = Table.TransformColumnTypes(ExpandirCampos, {
+        {"codigo", type text},
+        {"descricao", type text},
+        {"estrutura", type text},
+        {"inativo", type text}
+    }),
+    
+    // Remove Pagina column if not needed
+    RemoverPagina = Table.RemoveColumns(FormatarTipos, {"Pagina"})
+in
+    RemoverPagina
